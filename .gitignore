@@ -1,2 +1,6 @@
 derby.log
 metastore_db/**
+.idea/
+build_temp/
+tcliservice/
+TCLIService/

@@ -3,10 +3,11 @@
 package hivething
 
 import (
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"git.apache.org/thrift.git/lib/go/thrift"
-	"github.com/derekgr/hivething/TCLIService"
+	"github.com/derekgr/hivething/tcliservice"
 )
 
 // Options for opened Hive sessions.
@@ -26,14 +27,15 @@ type Connection struct {
 }
 
 func Connect(host string, options Options) (*Connection, error) {
-	transport, err := thrift.NewTSocket(host)
+	cfg := new(tls.Config)
+	cfg.InsecureSkipVerify = true
+	thrift.
+	socket, err := thrift.NewTSSLSocket(host, cfg)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := transport.Open(); err != nil {
-		return nil, err
-	}
+	transport := thrift.NewTBufferedTransportFactory(10240).GetTransport()
 
 	if transport == nil {
 		return nil, errors.New("nil thrift transport")
@@ -47,7 +49,7 @@ func Connect(host string, options Options) (*Connection, error) {
 	protocol := thrift.NewTBinaryProtocolFactoryDefault()
 	client := tcliservice.NewTCLIServiceClientFactory(transport, protocol)
 
-	session, err := client.OpenSession(*tcliservice.NewTOpenSessionReq())
+	session, err := client.OpenSession(tcliservice.NewTOpenSessionReq())
 	if err != nil {
 		return nil, err
 	}
@@ -64,8 +66,8 @@ func (c *Connection) isOpen() bool {
 func (c *Connection) Close() error {
 	if c.isOpen() {
 		closeReq := tcliservice.NewTCloseSessionReq()
-		closeReq.SessionHandle = *c.session
-		resp, err := c.thrift.CloseSession(*closeReq)
+		closeReq.SessionHandle = c.session
+		resp, err := c.thrift.CloseSession(closeReq)
 		if err != nil {
 			return fmt.Errorf("Error closing session: ", resp, err)
 		}
@@ -80,15 +82,15 @@ func (c *Connection) Close() error {
 // can be later used to query the operation's status.
 func (c *Connection) Query(query string) (RowSet, error) {
 	executeReq := tcliservice.NewTExecuteStatementReq()
-	executeReq.SessionHandle = *c.session
+	executeReq.SessionHandle = c.session
 	executeReq.Statement = query
 
-	resp, err := c.thrift.ExecuteStatement(*executeReq)
+	resp, err := c.thrift.ExecuteStatement(executeReq)
 	if err != nil {
 		return nil, fmt.Errorf("Error in ExecuteStatement: %+v, %v", resp, err)
 	}
 
-	if !isSuccessStatus(resp.Status) {
+	if !isSuccessStatus(*resp.Status) {
 		return nil, fmt.Errorf("Error from server: %s", resp.Status.String())
 	}
 

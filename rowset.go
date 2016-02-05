@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"git.apache.org/thrift.git/lib/go/thrift"
-	"github.com/derekgr/hivething/TCLIService"
+	"github.com/derekgr/hivething/tcliservice"
 )
 
 type rowSet struct {
@@ -65,14 +65,14 @@ func Reattach(conn *Connection, handle []byte) (RowSet, error) {
 // Issue a thrift call to check for the job's current status.
 func (r *rowSet) Poll() (*Status, error) {
 	req := tcliservice.NewTGetOperationStatusReq()
-	req.OperationHandle = *r.operation
+	req.OperationHandle = r.operation
 
-	resp, err := r.thrift.GetOperationStatus(*req)
+	resp, err := r.thrift.GetOperationStatus(req)
 	if err != nil {
 		return nil, fmt.Errorf("Error getting status: %+v, %v", resp, err)
 	}
 
-	if !isSuccessStatus(resp.Status) {
+	if !isSuccessStatus(*resp.Status) {
 		return nil, fmt.Errorf("GetStatus call failed: %s", resp.Status.String())
 	}
 
@@ -96,14 +96,14 @@ func (r *rowSet) Wait() (*Status, error) {
 			if status.IsSuccess() {
 				// Fetch operation metadata.
 				metadataReq := tcliservice.NewTGetResultSetMetadataReq()
-				metadataReq.OperationHandle = *r.operation
+				metadataReq.OperationHandle = r.operation
 
-				metadataResp, err := r.thrift.GetResultSetMetadata(*metadataReq)
+				metadataResp, err := r.thrift.GetResultSetMetadata(metadataReq)
 				if err != nil {
 					return nil, err
 				}
 
-				if !isSuccessStatus(metadataResp.Status) {
+				if !isSuccessStatus(*metadataResp.Status) {
 					return nil, fmt.Errorf("GetResultSetMetadata failed: %s", metadataResp.Status.String())
 				}
 
@@ -149,17 +149,17 @@ func (r *rowSet) Next() bool {
 		}
 
 		fetchReq := tcliservice.NewTFetchResultsReq()
-		fetchReq.OperationHandle = *r.operation
+		fetchReq.OperationHandle = r.operation
 		fetchReq.Orientation = tcliservice.TFetchOrientation_FETCH_NEXT
 		fetchReq.MaxRows = r.options.BatchSize
 
-		resp, err := r.thrift.FetchResults(*fetchReq)
+		resp, err := r.thrift.FetchResults(fetchReq)
 		if err != nil {
 			log.Printf("FetchResults failed: %v\n", err)
 			return false
 		}
 
-		if !isSuccessStatus(resp.Status) {
+		if !isSuccessStatus(*resp.Status) {
 			log.Printf("FetchResults failed: %s\n", resp.Status.String())
 			return false
 		}
